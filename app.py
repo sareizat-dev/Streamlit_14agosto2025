@@ -1,106 +1,53 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.express as px
+from langchain_groq import ChatGroq
+from langchain.prompts import ChatPromptTemplate
+from langchain.chains import LLMChain
 
-# Configuración inicial
-st.set_page_config(
-    page_title="Análisis de Datos de Salud - Colombia",
-    layout="wide"
+# Configuración de la página
+st.set_page_config(page_title="Agente con Llama3-8B", page_icon="🤖", layout="centered")
+
+st.title("🤖 Agente LangChain + Groq (Llama3-8B-8192)")
+
+# Entrada de API Key
+groq_api_key = st.text_input(
+    "Introduce tu GROQ API Key:",
+    type="password",
+    help="Puedes obtener tu API Key en https://console.groq.com/"
 )
 
-st.title("🏥 Análisis Exploratorio Interactivo de Datos de Salud en Colombia")
-st.write(
-    """
-    Este dashboard genera un conjunto de datos simulados sobre indicadores de salud en Colombia.
-    Los datos son aleatorios y solo con fines de demostración.
-    """
-)
+# Inicializar LLM solo si hay API Key
+if groq_api_key:
+    llm = ChatGroq(
+        groq_api_key=groq_api_key,
+        model="llama3-8b-8192",
+        temperature=0.7,
+        max_tokens=512
+    )
 
-# Simulación de datos de salud
-np.random.seed(42)
-num_filas = 500
-columnas_salud = [
-    "Edad",
-    "Sexo",  # M/F
-    "Peso (kg)",
-    "Altura (cm)",
-    "IMC",
-    "Presión Sistólica",
-    "Presión Diastólica",
-    "Glucosa (mg/dL)",
-    "Colesterol (mg/dL)",
-    "Enfermedad Crónica"  # Sí/No
-]
+    # Plantilla de prompt
+    prompt_template = ChatPromptTemplate.from_template(
+        "Eres un asistente experto en análisis de datos y salud en Colombia. "
+        "Responde de forma clara y detallada la siguiente consulta:\n\n{pregunta}"
+    )
 
-# Datos numéricos aleatorios
-data = {
-    "Edad": np.random.randint(18, 90, num_filas),
-    "Sexo": np.random.choice(["Masculino", "Femenino"], num_filas),
-    "Peso (kg)": np.random.randint(45, 110, num_filas),
-    "Altura (cm)": np.random.randint(150, 200, num_filas),
-    "IMC": np.round(np.random.uniform(18, 35, num_filas), 1),
-    "Presión Sistólica": np.random.randint(90, 180, num_filas),
-    "Presión Diastólica": np.random.randint(60, 120, num_filas),
-    "Glucosa (mg/dL)": np.random.randint(70, 200, num_filas),
-    "Colesterol (mg/dL)": np.random.randint(120, 300, num_filas),
-    "Enfermedad Crónica": np.random.choice(["Sí", "No"], num_filas)
-}
+    # Crear el Chain
+    chain = LLMChain(llm=llm, prompt=prompt_template)
 
-df = pd.DataFrame(data)
+    # Interfaz de usuario
+    st.subheader("Haz una pregunta")
+    pregunta_usuario = st.text_area("Escribe aquí tu consulta:", height=120)
 
-# Mostrar tabla
-st.subheader("📄 Datos de Salud Simulados")
-st.dataframe(df)
-
-# Checkbox para estadísticas
-if st.checkbox("Mostrar estadísticas descriptivas"):
-    st.subheader("📊 Estadísticas Descriptivas")
-    st.write(df.describe(include="all"))
-
-# Sidebar para seleccionar columnas y gráficos
-st.sidebar.header("Configuración de Visualización")
-columnas_seleccionadas = st.sidebar.multiselect(
-    "Selecciona columnas para visualizar",
-    options=df.columns,
-    default=["Edad"]
-)
-
-tipo_grafico = st.sidebar.selectbox(
-    "Tipo de gráfico",
-    ["Barras", "Líneas", "Dispersión (Scatter)", "Histograma"]
-)
-
-# Generar gráfico
-if columnas_seleccionadas:
-    st.subheader(f"📈 Visualización - {tipo_grafico}")
-
-    fig = None
-    if tipo_grafico == "Barras":
-        fig = px.bar(df, y=columnas_seleccionadas, title="Gráfico de Barras")
-    elif tipo_grafico == "Líneas":
-        fig = px.line(df, y=columnas_seleccionadas, markers=True, title="Gráfico de Líneas")
-    elif tipo_grafico == "Dispersión (Scatter)":
-        if len(columnas_seleccionadas) >= 2:
-            fig = px.scatter(df, x=columnas_seleccionadas[0], y=columnas_seleccionadas[1],
-                             color="Sexo", title="Gráfico de Dispersión")
+    if st.button("Enviar", type="primary"):
+        if pregunta_usuario.strip():
+            with st.spinner("Pensando... 💭"):
+                respuesta = chain.run(pregunta=pregunta_usuario)
+            st.markdown("### Respuesta:")
+            st.write(respuesta)
         else:
-            st.warning("Selecciona al menos dos columnas para gráfico de dispersión.")
-    elif tipo_grafico == "Histograma":
-        fig = px.histogram(df, x=columnas_seleccionadas[0], color="Sexo", barmode="overlay",
-                           title="Histograma")
-
-    if fig:
-        st.plotly_chart(fig, use_container_width=True)
+            st.warning("Por favor ingresa una pregunta antes de enviar.")
 else:
-    st.info("Selecciona al menos una columna para visualizar.")
+    st.info("🔑 Por favor, introduce tu GROQ API Key para comenzar.")
 
-# Opción para descargar datos
-st.sidebar.header("Descargar Datos")
-csv = df.to_csv(index=False).encode("utf-8")
-st.sidebar.download_button(
-    label="📥 Descargar CSV",
-    data=csv,
-    file_name="datos_salud_colombia.csv",
-    mime="text/csv"
-)
+st.caption("Powered by LangChain + Groq + Llama3-8B-8192")
+
+
